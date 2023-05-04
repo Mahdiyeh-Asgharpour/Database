@@ -19,17 +19,27 @@
 -- SELECT count( customer_id )  from payment
 -- WHERE  amount IN (0.99,4.99,0.00);
 --8
+-- select count(distinct customer_id) from rental;
 
 --9
+-- select distinct customer_id from rental;
 
---*10
--- select count(rating) from film 
--- where rating=(select distinct rating from film);
+--10
+-- select count(rating),rating from film 
+-- group by rating;
 --امتیازی
 --*1
--- select first_name,last_name from customer , all from payment
--- where customer_id=344 and payment_date between #2007-02-15
--- and #2007-02-20;
+select *from payment,customer.first_name ,customer.last_name 
+from customer
+left join payment
+on customer.customer_id=payment.customer_id
+where customer_id=344 and payment_date between '#2007-02-15'
+and'#2007-02-20';
+
 --2
 -- SELECT first_name || ' ' || last_name as full_name FROM customer;
 --3
+-- update film
+-- set rental_rate= Round(rental_rate*'0.8',2);
+-- SELECT * from film;
+
