@@ -47,36 +47,44 @@ inner join film_category on film.film_id =film_category.film_id
 inner join category on  category.category_id=film_category.category_id
 where film.length>90 and category.name='Sci-Fi' and film.rating = 'PG-13'
 ) order by(actor.actor_id)
---*8
+--8
+with fi(value) as (select film_id from film_actor join actor on actor.actor_id = film_actor.actor_id
+				   where actor.first_name = 'Sandra' and actor.last_name='Peck' )
 select film.title ,actor.first_name,actor.last_name
 from actor
 inner join film_actor on  actor.actor_id=film_actor.actor_id
 inner join film on film.film_id = film_actor.film_id
-where film.film_id=(select film.film_id from film inner join film_actor on  film.film_id=film_actor.film_id
-inner join actor on actor.actor_id = film_actor.actor_id
 inner join film_category on film.film_id =film_category.film_id
 inner join category on  category.category_id=film_category.category_id
- where actor.first_name='Sandra' and actor.last_name='Peck'and  category.name='Action')	and 
- actor.first_name!='Sandra' and actor.last_name!='Peck'
+where  film.film_id  in(select film.film_id from film join film_category on film.film_id = film_category.film_id 
+												 join category on category.category_id = film_category.category_id 
+												 join fi on fi.value = film.film_id) and   category.name = 'Action'
+and actor.first_name != 'Sandra' and actor.last_name!='Peck' 
  
---9*
-select film.title ,film.length
+ 
+--9
+with fi(value) as (select film_id from film_actor join actor on actor.actor_id = film_actor.actor_id 
+ where actor.first_name = 'Sandra' and actor.last_name='Peck' )
+select distinct film.title ,film.length
 from film
 inner join film_actor on  film.film_id=film_actor.film_id
 inner join actor on actor.actor_id = film_actor.actor_id
-where film.film_id=(select film.film_id from film inner join film_actor on  film.film_id=film_actor.film_id
-inner join actor on actor.actor_id = film_actor.actor_id
- where actor.first_name='Sandra' and actor.last_name='Peck')	and 
- actor.first_name='Ralph' and actor.last_name='Cruz'
+where  film.film_id in(select film.film_id from film
+ inner join film_actor on  film.film_id=film_actor.film_id
+inner join actor on actor.actor_id = film_actor.actor_id 
+  join fi on fi.value = film.film_id 
+ where actor.first_name = 'Ralph' and actor.last_name='Cruz' )
+
 --10*
+with fi(value) as (select film_id from film_actor join actor on actor.actor_id = film_actor.actor_id where actor.first_name != 'Sandra' and actor.last_name!='Peck' )
 select film.title ,film.length
 from film
 inner join film_actor on  film.film_id=film_actor.film_id
 inner join actor on actor.actor_id = film_actor.actor_id
-where film.film_id=(select film.film_id from film inner join film_actor on  film.film_id=film_actor.film_id
-inner join actor on actor.actor_id = film_actor.actor_id
- where actor.first_name!='Sandra' and actor.last_name!='Peck')	and 
- actor.first_name!='Ralph' and actor.last_name!='Cruz'and film.length>100
+where  film.film_id in(select film.film_id from film inner join film_actor on  film.film_id=film_actor.film_id
+inner join actor on actor.actor_id = film_actor.actor_id join fi on fi.value = film.film_id 
+												 where actor.first_name != 'Ralph' and actor.last_name!='Cruz' )
+												 and film.length>100
 --11
 select public.language.name,count(film.film_id)q
 from public.language
