@@ -78,7 +78,7 @@ inner join actor on actor.actor_id = film_actor.actor_id
  where actor.first_name!='Sandra' and actor.last_name!='Peck')	and 
  actor.first_name!='Ralph' and actor.last_name!='Cruz'and film.length>100
 --11
-select public.language.name,count(film.film_id)
+select public.language.name,count(film.film_id)q
 from public.language
 full join film on film.language_id =public.language.language_id
 group by(public.language.language_id);
