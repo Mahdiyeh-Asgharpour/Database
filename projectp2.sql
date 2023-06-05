@@ -23,6 +23,10 @@ CREATE TABLE messages (
   receiver_chat_id INTEGER REFERENCES chat(chat_id),
   sender_user_id INTEGER REFERENCES "user"(user_id),
     send_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+	--receiving
+	FOREIGN KEY (chat_id) REFERENCES chat(chat_id)
+	--sending
+	FOREIGN KEY (user_id) REFERENCES user(user_id)
 )
 --channel
 create table channel(
