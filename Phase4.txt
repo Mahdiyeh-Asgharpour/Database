@@ -1,12 +1,12 @@
 -- INDEX on users
-CREATE INDEX idx_users_user_id ON users (user_id);
 CREATE INDEX idx_users_username ON users (username);
+CREATE INDEX idx_users_phone_number ON users (phone_number);
 
 -- INDEX on user_contacts
-CREATE INDEX idx_user_contacts_user_id ON user_contacts (user_id);
 CREATE INDEX idx_user_contacts_contact_id ON user_contacts (contact_id);
 
--- Transaction Q1
+-- Transaction
+
 BEGIN;
 INSERT INTO users (username, password, first_name, last_name, phone_number)
 VALUES ('johndoe', '123456', 'John', 'Doe', '+228-363-521-6763');
