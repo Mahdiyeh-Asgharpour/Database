@@ -326,6 +326,36 @@ FROM group_members
 WHERE group_id = 3
 
 
+/* STORED PROCEDURE EXTRA Q3 */
+
+CREATE OR REPLACE PROCEDURE add_user_with_session(
+    p_username VARCHAR(50),
+    p_password VARCHAR(255),
+    p_first_name VARCHAR(50),
+    p_last_name VARCHAR(50),
+    p_phone_number VARCHAR(17),
+    p_device_id VARCHAR(50),
+    p_device_type VARCHAR(50)
+)
+AS $$
+DECLARE
+    v_user_id INTEGER;
+BEGIN
+    INSERT INTO users (username, password, first_name, last_name, phone_number)
+    VALUES (p_username, p_password, p_first_name, p_last_name, p_phone_number)
+    RETURNING user_id INTO v_user_id;
+    
+    INSERT INTO user_sessions (user_id, device_id, device_type)
+    VALUES (v_user_id, p_device_id, p_device_type);
+    
+    COMMIT;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CALL add_user_with_session('joedoe', '234567', 'Joe', 'Doe', '+63-434-904-4934', '7653', 'LG');
+
+
 /* TRIGGER Q1 */
 
 CREATE OR REPLACE FUNCTION group_member_limit()
