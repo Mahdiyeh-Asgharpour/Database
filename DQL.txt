@@ -1,36 +1,36 @@
 /* Q1 */
 SELECT u.*, COUNT(DISTINCT gm.group_id) as groups
-FROM "user" u
+FROM users u
 JOIN group_members gm ON u.user_id = gm.user_id
 GROUP BY u.user_id
 HAVING COUNT(DISTINCT gm.group_id) > 1;
 
 /* Q2 */
 SELECT u.*, COUNT(DISTINCT gm.group_id) as groups
-FROM "user" u
+FROM users u
 JOIN group_members gm ON u.user_id = gm.user_id
 WHERE gm.role = 'admin'
 GROUP BY u.user_id
 HAVING COUNT(DISTINCT gm.group_id) > 1;
 
 /* Q3 */
-SELECT u.*
-FROM "user" u
-INNER JOIN group_message gm ON u.user_id = gm.sender_id
+SELECT gm.group_id, u.*
+FROM users u
+INNER JOIN group_messages gm ON u.user_id = gm.sender_id
 LEFT JOIN group_members gmbr ON gm.group_id = gmbr.group_id AND u.user_id = gmbr.user_id
 WHERE gmbr.group_id IS NULL
 
 /* Q4 */
 SELECT DISTINCT ON (gm.group_id) gm.group_id, gm.content, gm.created_at
-FROM group_message gm
+FROM group_messages gm
 ORDER BY gm.group_id, gm.created_at ASC
 
 /* Q5 */
 SELECT pm.private_message_id, uc.user_id, pm.sender_id, uc.contact_id, pm.receiver_id
-FROM "user" u
+FROM users u
 INNER JOIN user_contacts uc ON u.user_id = uc.user_id
-INNER JOIN "user" c ON uc.contact_id = c.user_id
-INNER JOIN private_message pm ON (pm.sender_id = u.user_id AND pm.receiver_id = c.user_id)
+INNER JOIN users c ON uc.contact_id = c.user_id
+INNER JOIN private_messages pm ON (pm.sender_id = u.user_id AND pm.receiver_id = c.user_id)
 ORDER BY u.user_id, c.user_id, pm.created_at ASC
 
 /* EXTRA */
@@ -54,38 +54,38 @@ GROUP BY uc.user_id, uc.contact_id;
 
 -- A query to view users that are connected with more than 3 device
 SELECT u.user_id, u.username, count(*) AS total_devices 
-FROM "user" u 
+FROM users u 
 JOIN user_sessions s ON u.user_id = s.user_id 
 GROUP BY u.user_id, u.username 
 HAVING COUNT(*) > 3;
 
--- A query to view session info of users who have saved 'Walden' as their contacts
-WITH walden AS (
+-- A query to view session info of users who have saved Eartha Goulbourne' as their contacts
+WITH eartha AS (
   SELECT user_id
-  FROM "user"
-  WHERE first_name = 'Walden'
+  FROM users
+  WHERE first_name = 'Eartha' AND last_name = 'Goulbourne'
 ),
-walden_contacts AS (
+eartha_contacts AS (
   SELECT user_id
   FROM user_contacts
-  WHERE contact_id IN (SELECT user_id FROM walden)
+  WHERE contact_id IN (SELECT user_id FROM eartha)
 )
 SELECT u.user_id, u.first_name, u.last_name, us.device_type
 FROM user_sessions us
-JOIN walden_contacts wc ON us.user_id = wc.user_id
-JOIN "user" u ON us.user_id = u.user_id
+JOIN eartha_contacts ea ON us.user_id = ea.user_id
+JOIN users u ON us.user_id = u.user_id
 
 -- A query to view all how many contacts each user has
 SELECT u.user_id, count(c.contact_id) AS total_contacts
-FROM "user" u 
+FROM users u 
 LEFT JOIN user_contacts c ON u.user_id = c.user_id 
 GROUP BY u.user_id, u.username, u.first_name, u.last_name;
 
 -- A query to view the count of each channel's members and admins, where at least there is 1 admin
 SELECT c.channel_id, c.name, count(m.user_id) AS total_members, COUNT(u.user_id) AS admins
-FROM channel c 
+FROM channels c 
 LEFT JOIN channel_members m ON c.channel_id = m.channel_id 
-LEFT JOIN "user" u ON m.user_id = u.user_id AND m.role = 'admin'
+LEFT JOIN users u ON m.user_id = u.user_id AND m.role = 'admin'
 GROUP BY c.channel_id, c.name
 HAVING COUNT(u.user_id) > 0;
 

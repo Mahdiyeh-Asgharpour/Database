@@ -1,0 +1,443 @@
+/* VIEW Q1 */
+
+CREATE VIEW user_messages_to_most_active_contact AS
+WITH message_counts AS (
+    SELECT sender_id AS contact_sender_id, receiver_id AS user_receiver_id, COUNT(*) AS message_count
+    FROM private_messages
+    WHERE EXISTS (
+        SELECT 1
+        FROM user_contacts
+        WHERE user_id = receiver_id AND contact_id = sender_id
+    )
+    GROUP BY sender_id, receiver_id
+	ORDER BY sender_id, receiver_id
+),
+max_received_contact AS (
+    SELECT user_receiver_id AS user_id, contact_sender_id AS contact_id,
+        ROW_NUMBER() OVER (PARTITION BY user_receiver_id ORDER BY message_count DESC) AS row_num
+    FROM message_counts
+	WHERE user_receiver_id = 12
+)
+SELECT pm.private_message_id, pm.sender_id, pm.receiver_id, pm.content, pm.attachment_url, pm.created_at
+FROM private_messages AS pm
+JOIN max_received_contact AS mrc ON pm.sender_id = mrc.user_id AND pm.receiver_id = mrc.contact_id
+WHERE mrc.row_num = 1
+ORDER BY sender_id, receiver_id, created_at;
+
+
+SELECT *
+FROM user_messages_to_most_active_contact
+
+
+/* VIEW Q2 */
+
+CREATE VIEW chat_app_summary AS
+SELECT 
+	u.user_id,
+	COUNT(DISTINCT us.session_id) AS session_count,
+	COUNT(DISTINCT uc.contact_id) AS contact_count,
+	COUNT(DISTINCT gm.group_id) AS group_count,
+	COUNT(DISTINCT cm.channel_id) AS channel_count,
+	COUNT(DISTINCT pm.receiver_id) AS private_message_count,
+	MAX(pm.created_at) AS last_private_message,
+	MAX(gm2.created_at) AS last_group_message
+FROM users u
+LEFT JOIN user_sessions us ON u.user_id = us.user_id
+LEFT JOIN user_contacts uc ON u.user_id = uc.user_id
+LEFT JOIN group_members gm ON u.user_id = gm.user_id
+LEFT JOIN group_messages gm2 ON gm.group_id = gm2.group_id
+LEFT JOIN channel_members cm ON u.user_id = cm.user_id
+LEFT JOIN private_messages pm ON u.user_id = pm.sender_id OR u.user_id = pm.receiver_id
+GROUP BY u.user_id;
+
+
+SELECT *
+FROM chat_app_summary
+
+
+/* Materialized View Q1 */
+
+CREATE MATERIALIZED VIEW user_group_messages_at_time AS 
+SELECT gmsg.group_id, gmsg.sender_id, gmsg.created_at
+FROM group_messages gmsg
+WHERE gmsg.sender_id = 4
+AND gmsg.group_id = 12
+AND gmsg.created_at >= '2022-9-19 07:22:14'
+AND gmsg.created_at <= '2022-10-20 07:22:14';
+
+select *
+from user_group_messages_at_time
+
+/* Materialized View Q2 */
+
+CREATE MATERIALIZED VIEW user_messaged_to AS
+SELECT sender_id AS user_id, ARRAY_AGG(DISTINCT receiver_id) AS contacted_users
+FROM private_messages
+GROUP BY sender_id;
+
+SELECT *
+FROM user_messaged_to
+
+
+/* FUNCTION Q1 */
+
+CREATE OR REPLACE FUNCTION get_group_members(p_group_id INTEGER)
+  RETURNS TABLE (
+	group_id INTEGER,
+	user_id INTEGER,
+	username VARCHAR(50),
+	first_name VARCHAR(50),
+	last_name VARCHAR(50),
+	phone_number VARCHAR(17),
+	last_seen TIMESTAMP,
+	role VARCHAR(10)
+  )
+AS $$
+BEGIN
+	RETURN QUERY
+	SELECT gm.group_id, u.user_id, u.username, u.first_name, u.last_name, u.phone_number, u.last_seen, gm.role
+	FROM group_members gm
+	INNER JOIN users u ON gm.user_id = u.user_id
+	WHERE gm.group_id = p_group_id;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT *
+FROM get_group_members(1);
+
+
+
+/* FUNCTION Q2 */
+
+CREATE OR REPLACE FUNCTION get_user_private_messages(p_user_id INTEGER)
+  RETURNS TABLE (
+    private_message_id INTEGER,
+    sender_id INTEGER,
+    receiver_id INTEGER,
+    content TEXT,
+    attachment_url VARCHAR(255),
+    created_at TIMESTAMP
+  )
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT pm.private_message_id, pm.sender_id, pm.receiver_id, pm.content, pm.attachment_url, pm.created_at
+  FROM private_messages pm
+  INNER JOIN user_contacts uc ON (pm.sender_id = uc.user_id AND pm.receiver_id = uc.contact_id)
+  WHERE uc.user_id = p_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+SELECT *
+FROM get_user_private_messages(12);
+
+
+
+/* FUNCTION Q EXTRA */
+
+CREATE OR REPLACE FUNCTION get_group_messages_in_range(p_group_id INTEGER, p_start_time TIMESTAMP, p_end_time TIMESTAMP)
+  RETURNS TABLE (
+    group_message_id INTEGER,
+    group_id INTEGER,
+    sender_id INTEGER,
+    content TEXT,
+    attachment_url VARCHAR(255),
+    created_at TIMESTAMP
+  )
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT gm.group_message_id, gm.group_id, gm.sender_id, gm.content, gm.attachment_url, gm.created_at
+  FROM group_messages gm
+  WHERE gm.group_id = p_group_id AND gm.created_at >= p_start_time AND gm.created_at <= p_end_time;
+END;
+$$ LANGUAGE plpgsql;
+
+
+SELECT *
+FROM get_group_messages_in_range(1, '2021-04-29 03:50:04', '2023-04-29 03:50:04')
+
+
+/* FUNCTION OUR OWN EXTRA Q1 */
+
+CREATE OR REPLACE FUNCTION get_inactive_users(days INTEGER)
+RETURNS TABLE (
+    user_id INTEGER,
+    phone_number VARCHAR(17),
+    last_seen TIMESTAMP
+) AS $$
+BEGIN
+    RETURN QUERY SELECT 
+        u.user_id,
+        u.phone_number,
+        u.last_seen
+    FROM users u
+    WHERE u.last_seen <= NOW() - INTERVAL '1 DAY' * days
+	ORDER BY u.last_seen DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+
+select *
+from get_inactive_users(100);
+
+/* FUNCTION OUR OWN EXTRA Q2 */
+
+CREATE OR REPLACE FUNCTION get_users_with_most_messages_in_group(p_group_id INTEGER, lim INTEGER)
+RETURNS TABLE (
+    user_id INTEGER,
+    username VARCHAR(50),
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    phone_number VARCHAR(17),
+    message_count BIGINT
+) AS $$
+BEGIN
+    RETURN QUERY SELECT 
+        u.user_id,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.phone_number,
+        COUNT(m.group_message_id) AS message_count
+    FROM users u
+    JOIN group_members gm ON u.user_id = gm.user_id AND gm.group_id = p_group_id
+    JOIN group_messages m ON gm.user_id = m.sender_id
+    GROUP BY u.user_id
+    ORDER BY message_count DESC
+    LIMIT lim;
+END;
+$$ LANGUAGE plpgsql;
+
+
+SELECT *
+FROM get_users_with_most_messages_in_group(12, 5);
+
+
+/* STORED PROCEDURE Q1 */
+
+CREATE OR REPLACE PROCEDURE send_private_message(
+	p_sender_id INTEGER,
+	p_receiver_id INTEGER,
+	p_content TEXT,
+	p_attachment_url VARCHAR(255)
+) AS $$
+BEGIN
+	IF NOT EXISTS(SELECT 1 FROM users WHERE user_id = p_sender_id) THEN
+		RAISE EXCEPTION 'Sender does not exists.';
+	END IF;
+	IF NOT EXISTS(SELECT 1 FROM users WHERE user_id = p_receiver_id) THEN
+		RAISE EXCEPTION 'Receiver does not exists.';
+	END IF;
+	
+	INSERT INTO private_messages(sender_id, receiver_id, content, attachment_url)
+	VALUES(p_sender_id, p_receiver_id, p_content, p_attachment_url);
+END;
+$$ LANGUAGE plpgsql;
+
+
+CALL send_private_message(1, 2, 'Hello', NULL)
+
+SELECT *
+FROM private_messages
+WHERE sender_id = 1 AND receiver_id = 2;
+
+
+/* STORED PROCEDURE Q2 */
+
+CREATE OR REPLACE PROCEDURE send_group_message(
+  p_sender_id INTEGER,
+  p_group_id INTEGER,
+  p_content TEXT,
+  p_attachment_url VARCHAR(255)
+) AS $$
+BEGIN
+	IF NOT EXISTS(SELECT 1 FROM users WHERE user_id = p_sender_id) THEN
+		RAISE EXCEPTION 'Sender does not exist';
+	END IF;
+	IF NOT EXISTS(SELECT 1 FROM groups WHERE group_id = p_group_id) THEN
+		RAISE EXCEPTION 'Group does not exist';
+	END IF;
+
+	INSERT INTO group_messages(sender_id, group_id, content, attachment_url)
+	VALUES(p_sender_id, p_group_id, p_content, p_attachment_url);
+END;
+$$ LANGUAGE plpgsql;
+
+
+CALL send_group_message(1, 2, 'Hello', NULL)
+
+SELECT *
+FROM group_messages
+WHERE sender_id = 1 AND group_id = 2;
+
+/* STORED PROCEDURE EXTRA Q1 */
+
+CREATE OR REPLACE PROCEDURE add_session(
+  p_user_id INTEGER,
+  p_device_id VARCHAR(50),
+  p_device_type VARCHAR(50)
+) AS $$
+BEGIN
+	IF NOT EXISTS(SELECT 1 FROM users u WHERE u.user_id = p_user_id) THEN
+		RAISE EXCEPTION 'User does not exist';
+	END IF;
+	IF EXISTS(SELECT 1 FROM user_sessions u WHERE u.user_id = p_user_id AND u.device_id = p_device_id) THEN
+		RAISE EXCEPTION 'Session already exists.';
+	END IF;
+  	INSERT INTO user_sessions(user_id, device_id, device_type)
+  	VALUES(p_user_id, p_device_id, p_device_type);
+END;
+$$ LANGUAGE plpgsql;
+
+CALL add_session(2, '2345', 'iphone');
+
+SELECT *
+FROM user_sessions
+WHERE user_id = 2;
+
+/* STORED PROCEDURE EXTRA Q2 */
+
+CREATE OR REPLACE PROCEDURE add_group_member(
+  p_group_id INTEGER,
+  p_user_id INTEGER,
+  role VARCHAR(10)
+) AS $$
+BEGIN
+	IF NOT EXISTS(SELECT 1 FROM users u WHERE u.user_id = p_user_id) THEN
+		RAISE EXCEPTION 'User does not exist';
+	END IF;
+	IF NOT EXISTS(SELECT 1 FROM groups g WHERE g.group_id = p_group_id) THEN
+		RAISE EXCEPTION 'Group does not exist';
+	END IF;
+	IF EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id = p_group_id AND gm.user_id = p_user_id) THEN
+		RAISE EXCEPTION 'User is already a member of the group.';
+	END IF;
+  	INSERT INTO group_members(group_id, user_id, role)
+  	VALUES(p_group_id, p_user_id, role);
+END;
+$$ LANGUAGE plpgsql;
+
+CALL add_group_member(3, 14, 'admin');
+
+SELECT *
+FROM group_members
+WHERE group_id = 3
+
+
+/* TRIGGER Q1 */
+
+CREATE OR REPLACE FUNCTION group_member_limit()
+RETURNS TRIGGER
+AS $$
+BEGIN
+    IF (SELECT COUNT(*) FROM group_members WHERE group_id = NEW.group_id) >= 10 THEN
+        RAISE EXCEPTION 'Group is at maximum capacity';
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER check_group_member_limit
+BEFORE INSERT ON group_members
+FOR EACH ROW
+EXECUTE FUNCTION group_member_limit();
+
+insert into group_members (group_id, user_id, role) values (4, 10, 'member');
+
+
+SELECT group_id, COUNT(*) AS member_count
+FROM group_members
+GROUP BY group_id;
+
+
+/* TRIGGER Q2 */
+
+CREATE OR REPLACE FUNCTION check_message_limit()
+RETURNS TRIGGER
+AS $$
+BEGIN
+    IF (SELECT COUNT(*) FROM group_messages WHERE sender_id = NEW.sender_id AND group_id = NEW.group_id) >= 10 THEN
+        RAISE EXCEPTION 'Message limit exceeded for user in group';
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER message_limit_trigger
+BEFORE INSERT ON group_messages
+FOR EACH ROW
+EXECUTE FUNCTION check_message_limit();
+
+insert into group_messages (sender_id, group_id, content, attachment_url) values (19, 15, 'In sagittis dui vel nisl. Duis ac nibh. Fusce lacus purus, aliquet at, feugiat non, pretium quis, lectus.', NULL);
+
+SELECT group_id, user_id, message_count
+FROM (
+  SELECT gm.group_id, u.user_id, COUNT(*) AS message_count,
+         ROW_NUMBER() OVER (PARTITION BY gm.group_id ORDER BY COUNT(*) DESC) AS rank
+  FROM group_messages gm
+  INNER JOIN users u ON gm.sender_id = u.user_id
+  GROUP BY gm.group_id, gm.sender_id, u.user_id
+) AS rankings
+WHERE rankings.rank = 1;
+
+/* TRIGGER EXTRA Q1 */
+
+CREATE OR REPLACE FUNCTION update_last_seen()
+  RETURNS TRIGGER AS
+$$
+BEGIN
+  UPDATE users
+  SET last_seen = NEW.start_time
+  WHERE user_id = NEW.user_id;
+  RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_last_seen
+AFTER INSERT ON user_sessions
+FOR EACH ROW
+EXECUTE FUNCTION update_last_seen();
+
+
+SELECT *
+FROM users
+WHERE user_id = 2
+
+INSERT INTO user_sessions (user_id, device_id, device_type) VALUES (2, '543', 'samsung');
+
+SELECT *
+FROM users
+WHERE user_id = 2
+
+
+/* TRIGGER EXTRA Q2 */
+
+-- Create the trigger function
+CREATE OR REPLACE FUNCTION update_user_messaged_to()
+  RETURNS TRIGGER AS
+$$
+BEGIN
+  REFRESH MATERIALIZED VIEW user_messaged_to;
+  RETURN NULL;
+END;
+$$
+LANGUAGE plpgsql;
+
+-- Create the trigger
+CREATE TRIGGER trg_update_user_messaged_to
+AFTER INSERT OR UPDATE OR DELETE ON private_messages
+FOR EACH ROW
+EXECUTE FUNCTION update_user_messaged_to();
+
+SELECT *
+FROM user_messaged_to
+
+INSERT INTO private_messages (sender_id, receiver_id, content) VALUES (1, 5, 'text');
+
+SELECT *
+FROM user_messaged_to
