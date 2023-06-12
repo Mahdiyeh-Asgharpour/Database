@@ -1,0 +1,29 @@
+-- INDEX on users
+CREATE INDEX idx_users_user_id ON users (user_id);
+CREATE INDEX idx_users_username ON users (username);
+
+-- INDEX on user_contacts
+CREATE INDEX idx_user_contacts_user_id ON user_contacts (user_id);
+CREATE INDEX idx_user_contacts_contact_id ON user_contacts (contact_id);
+
+-- Transaction Q1
+BEGIN;
+INSERT INTO users (username, password, first_name, last_name, phone_number)
+VALUES ('johndoe', '123456', 'John', 'Doe', '+228-363-521-6763');
+COMMIT;
+
+BEGIN;
+WITH new_user_id AS (
+	SELECT user_id FROM users WHERE username = 'johndoe'
+)
+INSERT INTO user_sessions (user_id, device_id, device_type)
+SELECT user_id, '76543', 'LG' FROM new_user_id;
+ROLLBACK;
+
+BEGIN;
+WITH new_user_id AS (
+	SELECT user_id FROM users WHERE username = 'johndoe'
+)
+INSERT INTO user_sessions (user_id, device_id, device_type)
+SELECT user_id, '6481', 'Apple' FROM new_user_id;
+COMMIT;
