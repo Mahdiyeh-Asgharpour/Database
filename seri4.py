@@ -30,8 +30,8 @@ def delete(data):
 
 if __name__ == '__main__':
     conn = psycopg2.connect(
-        dbname="Test",
-        user="admin",
+        dbname="postgres",
+        user="postgres",
         password="admin",
         host="localhost",
         port="5432"
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     query = 'SELECT * FROM books'
     print(read(query))
-    #
+    
     data = (1,)
     update_available(data)
 
